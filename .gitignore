@@ -13,3 +13,5 @@
 # IntelliJ
 *.idea/
 *.iml
+
+vendor/
