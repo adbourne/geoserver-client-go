@@ -5,7 +5,7 @@ THIS_FILE := $(lastword $(MAKEFILE_LIST))
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v vendor)
 
 #
-default: dependencies generate build test
+default: dependencies build test
 
 clean:
 	rm -rf geoserver/bin/*; rm -rf pkg/*; rm -rf vendor/*
