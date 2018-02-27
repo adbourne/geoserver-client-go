@@ -41,6 +41,10 @@
   name = "gopkg.in/ory-am/dockertest.v3"
   version = "3.1.6"
 
+[[constraint]]
+  name = "github.com/kyoh86/richgo"
+  version = "0.2.8"
+
 [prune]
   go-tests = true
   unused-packages = true
