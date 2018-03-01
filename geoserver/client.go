@@ -43,7 +43,8 @@ type Client interface {
 	// FeatureTypeExists checks if a feature type exists in a workspaces and datastore, returning true if it does and false otherwise.
 	FeatureTypeExists(workspace string, datastore string, featureType string) (bool, error)
 
-	GetFeatureTypes(workspace string, datastore string, featureType string) (*GetFeatureTypesResponse, error)
+	// GetFeatureTypes gets the feature types for the provided workspace and datastore
+	GetFeatureTypes(workspace string, datastore string) (*GetFeatureTypesResponse, error)
 
 	// CreateFeatureType creates a "feature type", which is essentially a layer from a datastore.
 	CreateFeatureType(request *CreateFeatureTypeRequest) error
@@ -83,7 +84,7 @@ func (client *RestGeoserverClient) IsHealthOk() (isHealthy bool, err error) {
 		urlKey, url,
 	)
 
-	request, err := client.createAuthJSONRequest(httpMethodGet, url, nil)
+	request, err := client.createAuthJSONRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -126,7 +127,7 @@ func (client *RestGeoserverClient) WorkspaceExists(workspace string) (isExisting
 	)
 
 	var req *http.Request
-	req, err = client.createAuthJSONRequest(httpMethodGet, url, nil)
+	req, err = client.createAuthJSONRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -158,7 +159,7 @@ func (client *RestGeoserverClient) GetWorkspaces() (response *GetWorkspacesRespo
 		urlKey, url,
 	)
 
-	req, err := client.createAuthJSONRequest(httpMethodGet, url, nil)
+	req, err := client.createAuthJSONRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -233,6 +234,9 @@ func (client *RestGeoserverClient) CreateWorkspace(request *CreateWorkspaceReque
 
 	var requestJSONBytes []byte
 	requestJSONBytes, err = json.Marshal(restRequest)
+	if err != nil {
+		return
+	}
 
 	client.logger.Log(
 		levelKey, levelDebug,
@@ -241,7 +245,7 @@ func (client *RestGeoserverClient) CreateWorkspace(request *CreateWorkspaceReque
 		requestKey, string(requestJSONBytes),
 	)
 
-	req, err := client.createAuthJSONRequest(methodPost, url, bytes.NewReader(requestJSONBytes))
+	req, err := client.createAuthJSONRequest(http.MethodPost, url, bytes.NewReader(requestJSONBytes))
 	if err != nil {
 		return
 	}
@@ -294,7 +298,7 @@ func (client *RestGeoserverClient) DeleteWorkspace(workspace string) (err error)
 		"workspace", workspace,
 	)
 
-	req, err := client.createAuthJSONRequest(httpMethodDelete, url, nil)
+	req, err := client.createAuthJSONRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return
 	}
@@ -344,7 +348,7 @@ func (client *RestGeoserverClient) DatastoreExists(workspace string, datastore s
 	)
 
 	var req *http.Request
-	req, err = client.createAuthJSONRequest(httpMethodGet, url, nil)
+	req, err = client.createAuthJSONRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -375,9 +379,70 @@ func (client *RestGeoserverClient) DatastoreExists(workspace string, datastore s
 
 // GetDatastores gets the available datastores, returning an error if it is not possible.
 // It interacts with with Geoserver using its REST API.
-func (client *RestGeoserverClient) GetDatastores(workspace string) (*GetDatastoresResponse, error) {
-	// TODO: Implement me
-	return nil, nil
+func (client *RestGeoserverClient) GetDatastores(workspace string) (response *GetDatastoresResponse, err error) {
+	url := client.geoserverBaseURL + "/rest/workspaces/" + workspace + "/datastores.json"
+	client.logger.Log(
+		levelDebug, levelDebug,
+		messageKey, "Querying Geoserver for datastores",
+		urlKey, url,
+		"workspace", workspace,
+	)
+
+	req, err := client.createAuthJSONRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		client.logger.Log(
+			levelDebug, levelDebug,
+			messageKey, "Cannot communicate with Geoserver",
+			urlKey, url,
+			errorKey, err.Error(),
+		)
+		return
+	}
+
+	restResponse := newEmptyGetDatastoresRestResponse()
+
+	if 200 == resp.StatusCode {
+		var responseBytes []byte
+		responseBytes, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+
+		client.logger.Log(
+			levelKey, levelDebug,
+			messageKey, "Geoserver returned datastores",
+			urlKey, url,
+			"responseStatus", fmt.Sprintf("%d", resp.StatusCode),
+			"responseBody", string(responseBytes),
+		)
+
+		err = json.Unmarshal(responseBytes, restResponse)
+		if err != nil {
+			client.logger.Log(
+				levelKey, levelWarn,
+				messageKey, "Geoserver returned an invalid response",
+				urlKey, url,
+				"responseStatus", fmt.Sprintf("%d", resp.StatusCode),
+				"responseBody", string(responseBytes),
+			)
+			// Geoserver likes to return {"workspaces":""} when there are no spaces
+			// this isn't necessarily standard, but we'll account for it here
+			response = newEmptyGetDatastoresResponse()
+			err = nil
+			return
+		}
+
+		response = getDatastoresRestResponseToGetDatatstoresResponse(restResponse)
+
+		return
+	}
+
+	return
 }
 
 // CreateDatastore creates a datastore in the provided workspace, returning an error if it is not possible.
@@ -399,7 +464,7 @@ func (client *RestGeoserverClient) CreateDatastore(request *CreateDatastoreReque
 		"request", string(requestJSONBytes),
 	)
 
-	req, err := client.createAuthJSONRequest(methodPost, url, bytes.NewReader(requestJSONBytes))
+	req, err := client.createAuthJSONRequest(http.MethodPost, url, bytes.NewReader(requestJSONBytes))
 	if err != nil {
 		return
 	}
@@ -441,7 +506,7 @@ func (client *RestGeoserverClient) DeleteDatastore(workspace string, datastore s
 		"datastore", datastore,
 	)
 
-	req, err := client.createAuthJSONRequest(httpMethodDelete, url, nil)
+	req, err := client.createAuthJSONRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return
 	}
@@ -478,6 +543,122 @@ func (client *RestGeoserverClient) DeleteDatastore(workspace string, datastore s
 	return
 }
 
+// FeatureTypeExists checks if a feature type exists, returning true if it does, false otherwise.
+// It interacts with with Geoserver using its REST API.
+func (client *RestGeoserverClient) FeatureTypeExists(workspace string, datastore string, featureType string) (isExisting bool, err error) {
+	url := client.geoserverBaseURL + "/rest/workspaces/" + workspace + "/datastores/" + datastore + "/featuretypes/" + featureType + ".json"
+
+	client.logger.Log(
+		messageKey, "Querying Geoserver for specific data feature type",
+		urlKey, url,
+		"workspace", workspace,
+		"datastore", datastore,
+		"featureType", featureType,
+	)
+
+	var req *http.Request
+	req, err = client.createAuthJSONRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		client.logger.Log(
+			messageKey, "Could not communicate with Geoserver",
+			urlKey, url,
+			errorKey, err.Error(),
+		)
+		return
+	}
+
+	if 200 == resp.StatusCode {
+		isExisting = true
+
+	} else {
+		client.logger.Log(
+			messageKey, "Geoserver returned a non-200 HTTP when checking if feature type exists",
+			urlKey, url,
+			"workspace", workspace,
+			"datastore", datastore,
+			"featureType", featureType,
+			"responseStatus", fmt.Sprintf("%d", resp.StatusCode),
+		)
+	}
+	return
+}
+
+// GetFeatureTypes gets available feature types.
+// It interacts with with Geoserver using its REST API.
+func (client *RestGeoserverClient) GetFeatureTypes(workspace string, datastore string) (result *GetFeatureTypesResponse, err error) {
+	url := client.geoserverBaseURL + "/rest/workspaces/" + workspace + "/datastores/" + datastore + "/featuretypes.json"
+	client.logger.Log(
+		levelDebug, levelDebug,
+		messageKey, "Querying Geoserver for feature types",
+		urlKey, url,
+		"workspace", workspace,
+		"datastore", datastore,
+	)
+
+	req, err := client.createAuthJSONRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		client.logger.Log(
+			levelDebug, levelDebug,
+			messageKey, "Cannot communicate with Geoserver",
+			urlKey, url,
+			errorKey, err.Error(),
+		)
+		return
+	}
+
+	restResponse := newBlankGetFeatureTypeRestResponse()
+
+	if 200 == resp.StatusCode {
+		var responseBytes []byte
+		responseBytes, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+
+		client.logger.Log(
+			levelKey, levelDebug,
+			messageKey, "Geoserver returned feature types",
+			urlKey, url,
+			"workspace", workspace,
+			"datastore", datastore,
+			"responseStatus", fmt.Sprintf("%d", resp.StatusCode),
+			"responseBody", string(responseBytes),
+		)
+
+		err = json.Unmarshal(responseBytes, restResponse)
+		if err != nil {
+			client.logger.Log(
+				levelKey, levelWarn,
+				messageKey, "Geoserver returned an invalid response",
+				urlKey, url,
+				"workspace", workspace,
+				"datastore", datastore,
+				"responseStatus", fmt.Sprintf("%d", resp.StatusCode),
+				"responseBody", string(responseBytes),
+			)
+			result = newEmptyGetFeatureTypesResponse()
+			err = nil
+			return
+		}
+
+		result = getFeatureTypeRestResponseToGetFeatureTypeResponse(restResponse)
+
+		return
+	}
+
+	return
+}
+
 // CreateFeatureType creates a "feature type", which is essentially a layer from a datastore.
 // It interacts with with Geoserver using its REST API.
 func (client *RestGeoserverClient) CreateFeatureType(request *CreateFeatureTypeRequest) (err error) {
@@ -492,12 +673,12 @@ func (client *RestGeoserverClient) CreateFeatureType(request *CreateFeatureTypeR
 	}
 
 	client.logger.Log(
-		messageKey, "Creating a Geoserver layer",
+		messageKey, "Creating a Geoserver feature type",
 		urlKey, url,
 		"request", string(requestJSONBytes),
 	)
 
-	req, err := client.createAuthJSONRequest(methodPost, url, bytes.NewReader(requestJSONBytes))
+	req, err := client.createAuthJSONRequest(http.MethodPost, url, bytes.NewReader(requestJSONBytes))
 	if err != nil {
 		return
 	}
@@ -514,7 +695,7 @@ func (client *RestGeoserverClient) CreateFeatureType(request *CreateFeatureTypeR
 
 	if 201 == response.StatusCode {
 		client.logger.Log(
-			messageKey, "datastore created successfully",
+			messageKey, "Feature type created successfully",
 			urlKey, url,
 			"workspace", request.DataStore,
 			"datastore", request.Name,
@@ -524,6 +705,59 @@ func (client *RestGeoserverClient) CreateFeatureType(request *CreateFeatureTypeR
 	}
 
 	err = fmt.Errorf("unable to create datalayer '%s'", request.Name)
+	return
+}
+
+// DeleteFeatureType deletes a feature type, returning an error if it doesn't exist.
+// It interacts with with Geoserver using its REST API.
+func (client *RestGeoserverClient) DeleteFeatureType(workspace string, datastore string, featureType string) (err error) {
+
+	url := client.geoserverBaseURL + "/rest/workspaces/" + workspace + "/datastores/" + datastore + "/featuretypes/" + featureType + ".json?recurse=true"
+
+	client.logger.Log(
+		messageKey, "Deleting a Geoserver feature type",
+		urlKey, url,
+		"workspace", workspace,
+		"datstore", datastore,
+		"featureType", featureType,
+	)
+
+	req, err := client.createAuthJSONRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return
+	}
+
+	response, err := client.httpClient.Do(req)
+	if err != nil {
+		client.logger.Log(
+			messageKey, "Cannot communicate with Geoserver",
+			urlKey, url,
+			errorKey, err.Error(),
+		)
+		return
+	}
+
+	if 200 == response.StatusCode || 404 == response.StatusCode {
+		client.logger.Log(
+			messageKey, "Feature type deleted successfully",
+			urlKey, url,
+			"workspace", workspace,
+			"datastore", datastore,
+			"featureType", featureType,
+		)
+		return
+	}
+
+	client.logger.Log(
+		messageKey, "Feature type cannot be deleted",
+		urlKey, url,
+		"workspace", workspace,
+		"datastore", datastore,
+		"featureType", featureType,
+		"statusCode", fmt.Sprintf("%d", response.StatusCode),
+	)
+
+	err = fmt.Errorf("unable to delete feature type '%s' in datastore '%s' and workspace '%s'", featureType, datastore, workspace)
 	return
 }
 

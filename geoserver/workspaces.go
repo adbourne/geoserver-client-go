@@ -66,8 +66,10 @@ func newCreateWorkspaceRestRequest(request *CreateWorkspaceRequest) *createWorks
 // getWorkspacesRestResponseToGetWorkspacesResponse converts a getWorkspacesRestResponse into a GetWorkspacesResponse
 func getWorkspacesRestResponseToGetWorkspacesResponse(response *getWorkspacesRestResponse) *GetWorkspacesResponse {
 	workspaces := make([]*Workspace, 0)
-	for _, workspace := range response.Workspaces.Workspace {
-		workspaces = append(workspaces, restWorkspaceToWorkspace(workspace))
+	if response.Workspaces.Workspace != nil {
+		for _, workspace := range response.Workspaces.Workspace {
+			workspaces = append(workspaces, restWorkspaceToWorkspace(workspace))
+		}
 	}
 
 	return &GetWorkspacesResponse{
@@ -77,10 +79,14 @@ func getWorkspacesRestResponseToGetWorkspacesResponse(response *getWorkspacesRes
 
 // restWorkspaceToWorkspace converts a restWorkspace into a Workspace
 func restWorkspaceToWorkspace(restWorkspace *restWorkspace) *Workspace {
-	return &Workspace{
-		Name: restWorkspace.Name,
-		Href: restWorkspace.Href,
+	if restWorkspace != nil {
+		return &Workspace{
+			Name: restWorkspace.Name,
+			Href: restWorkspace.Href,
+		}
 	}
+
+	return &Workspace{}
 }
 
 // newEmptyGetWorkspacesRestResponse creates a new getWorkspacesRestResponse with all pointers initialised

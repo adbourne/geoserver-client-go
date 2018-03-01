@@ -1,6 +1,6 @@
 package geoserver
 
-// CreateDatastoreRequest represents the properties that are required in order to create a datasource
+// CreateDatastoreRequest represents the properties that are required in order to create a datastore
 type CreateDatastoreRequest struct {
 	// Name is the name of the datastore to create
 	Name string
@@ -48,6 +48,42 @@ type Datastore struct {
 // createDatastoreRestRequest is a struct representation of the JSON required to create a datastore in Geoserver
 type createDatastoreRestRequest struct {
 	Datastore *restDatastore `json:"dataStore"`
+}
+
+type getDatastoresRestResponse struct {
+	Datastores *getDatastoresDatastores `json:"dataStores"`
+}
+
+type getDatastoresDatastores struct {
+	Datastores []*restDatastore `json:"dataStore"`
+}
+
+func newEmptyGetDatastoresResponse() *GetDatastoresResponse {
+	return &GetDatastoresResponse{
+		Datastores: make([]*Datastore, 0),
+	}
+}
+
+func newEmptyGetDatastoresRestResponse() *getDatastoresRestResponse {
+	return &getDatastoresRestResponse{
+		Datastores: &getDatastoresDatastores{
+			Datastores: make([]*restDatastore, 0),
+		},
+	}
+}
+
+func getDatastoresRestResponseToGetDatatstoresResponse(response *getDatastoresRestResponse) *GetDatastoresResponse {
+	result := newEmptyGetDatastoresResponse()
+
+	if response.Datastores != nil {
+		if response.Datastores.Datastores != nil {
+			for _, datastore := range response.Datastores.Datastores {
+				result.Datastores = append(result.Datastores, restDatastoreToDatastore(datastore))
+			}
+		}
+	}
+
+	return result
 }
 
 // restDatastore is a Geoserver datastore used to interact with the REST API
@@ -120,8 +156,15 @@ func mapToEntries(entries map[string]string) []*entry {
 
 // connectionDetailsToMap converts datasetConnectionParameters to a map[string]string
 func connectionDetailsToMap(connectionDetails *datasetConnectionParameters) (result map[string]string) {
-	for _, entry := range connectionDetails.Entry {
-		result[entry.Key] = entry.Value
+	result = make(map[string]string)
+	if connectionDetails != nil {
+		if connectionDetails.Entry != nil {
+			for _, entry := range connectionDetails.Entry {
+				if entry != nil {
+					result[entry.Key] = entry.Value
+				}
+			}
+		}
 	}
 	return
 }

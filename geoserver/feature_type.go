@@ -35,8 +35,21 @@ type CreateFeatureTypeRequest struct {
 	Workspace string
 }
 
-//
+// GetFeatureTypesResponse represents a response for the get feature types request
 type GetFeatureTypesResponse struct {
+	FeatureTypes []*FeatureType
+}
+
+func newEmptyGetFeatureTypesResponse() *GetFeatureTypesResponse {
+	return &GetFeatureTypesResponse{
+		FeatureTypes: make([]*FeatureType, 0),
+	}
+}
+
+// FeatureType represents a Geoserver feature type
+type FeatureType struct {
+	Name string
+	Href string
 }
 
 // BoundingBox represents a geospatial bounding box
@@ -65,6 +78,9 @@ type BoundingBox struct {
 type restFeatureType struct {
 	// Name is the name of the layer, it can include any case and spaces.
 	Name string `json:"name"`
+
+	// Href is the link to the feature type
+	Href string `json:"href"`
 
 	// NativeName is the native name of the feature type.
 	// It should be lowercase and contain no spaces.
@@ -165,7 +181,7 @@ func newCreateFeatureTypeRestRequest(request *CreateFeatureTypeRequest) *createF
 		Enabled:            true,
 		Store:              newStore(request.Workspace, request.DataStore),
 		ProjectionPolicy:   "REPROJECT_TO_DECLARED", // TODO
-		Attributes: &restAttributes{[]*restAttribute{ // TODO: Make dynamic
+		Attributes: &restAttributes{[]*restAttribute{// TODO: Make dynamic
 			{
 				Name:      "Geometry",
 				MinOccurs: 0,
@@ -176,6 +192,38 @@ func newCreateFeatureTypeRestRequest(request *CreateFeatureTypeRequest) *createF
 		},
 		},
 	}}
+}
+
+type getFeatureTypeRestResponse struct {
+	FeatureTypes restFeatureTypes `json:"featureTypes"`
+}
+
+func newBlankGetFeatureTypeRestResponse() *getFeatureTypeRestResponse {
+	return &getFeatureTypeRestResponse{
+	}
+}
+
+type restFeatureTypes struct {
+	FeatureTypes []*restFeatureType `json:"featureType"`
+}
+
+func getFeatureTypeRestResponseToGetFeatureTypeResponse(response *getFeatureTypeRestResponse) *GetFeatureTypesResponse {
+	result := &GetFeatureTypesResponse{
+		FeatureTypes: make([]*FeatureType, 0),
+	}
+
+	for _, featureType := range response.FeatureTypes.FeatureTypes {
+		result.FeatureTypes = append(result.FeatureTypes, restFeatureTypeToFeatureType(featureType))
+	}
+
+	return result
+}
+
+func restFeatureTypeToFeatureType(featureType *restFeatureType) *FeatureType {
+	return &FeatureType{
+		Name: featureType.Name,
+		Href: featureType.Href,
+	}
 }
 
 // newStore creates a new REST restStore with default values populates

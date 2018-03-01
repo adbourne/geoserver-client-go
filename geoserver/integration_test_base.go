@@ -1,38 +1,33 @@
 package geoserver
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/mattes/migrate"
-	// Blank import required by the migration library
-	_ "github.com/mattes/migrate/database/postgres"
-	// Blank import required by the migration library
-	"database/sql"
-	_ "github.com/mattes/migrate/source/file"
 	"github.com/stretchr/testify/suite"
 	"gopkg.in/ory-am/dockertest.v3"
-	golog "log"
 	"net/http"
 	"strconv"
 	"time"
+	// Blank import required by the migration library
+	_ "github.com/mattes/migrate/database/postgres"
+	// Blank import required by the migration library
+	_ "github.com/mattes/migrate/source/file"
 	// Blank import required for DB driver
 	_ "github.com/lib/pq"
 )
 
 const (
 	// Geoserver
-	geoserverDockerRepo = "adbourne/geoserver"
-	geoserverDockerTag  = "v2.10.5"
-	geoserverUsername   = "admin"
-	geoserverPassword   = "geoserver"
+	geoserverDockerRepo  = "adbourne/geoserver"
+	geoserverUsername    = "admin"
+	geoserverPassword    = "geoserver"
 
 	// Postgres
 	postgresDockerRepo = "mdillon/postgis"
 	postgresDockerTag  = "9.6-alpine"
 	postgresUsername   = "postgres"
 	postgresPassword   = "postgres"
-	TestDatabase       = "postgres"
-	TestSchema         = "public"
-	TestTable          = "test_data"
 )
 
 // BaseIntegrationTestSuite provides a base to build integration tests for the Geoserver client
@@ -54,20 +49,20 @@ type BaseIntegrationTestSuite struct {
 
 // InitialiseBase initialises the core components of the integration test
 func (suite *BaseIntegrationTestSuite) InitialiseBase() {
-	suite.Logger = NewTestLogger()
+	suite.Logger = NewStdOutLogger()
 	suite.DockerTestPool = suite.createDockerConnectionPoolOrFail()
 }
 
-// GeoserverConnectionDetails represents the connection details for the Geoserver instance
-type GeoserverConnectionDetails struct {
+// geoserverConnectionDetails represents the connection details for the Geoserver instance
+type geoserverConnectionDetails struct {
 	BaseURL  string
 	Port     int
 	Username string
 	Password string
 }
 
-// StartGeoserver starts the Geoserver instance using Docker
-func (suite *BaseIntegrationTestSuite) StartGeoserver() *GeoserverConnectionDetails {
+// startGeoserver starts the Geoserver instance using Docker
+func (suite *BaseIntegrationTestSuite) startGeoserver(geoserverDockerTag string) *geoserverConnectionDetails {
 	geoserverOptions := &dockertest.RunOptions{
 		Repository: geoserverDockerRepo,
 		Tag:        geoserverDockerTag,
@@ -84,7 +79,7 @@ func (suite *BaseIntegrationTestSuite) StartGeoserver() *GeoserverConnectionDeta
 	hostPort := fmt.Sprintf("localhost:%s", resource.GetPort("8080/tcp"))
 	port, _ := strconv.Atoi(resource.GetPort("8080/tcp"))
 
-	connectionDetails := &GeoserverConnectionDetails{
+	connectionDetails := &geoserverConnectionDetails{
 		BaseURL:  hostPort,
 		Port:     port,
 		Username: geoserverUsername,
@@ -99,7 +94,7 @@ func (suite *BaseIntegrationTestSuite) StartGeoserver() *GeoserverConnectionDeta
 }
 
 // waitForGeoserverToStartUp waits for the Geoserver Docker instance to start up
-func (suite *BaseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetails *GeoserverConnectionDetails) {
+func (suite *BaseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetails *geoserverConnectionDetails) {
 	if err := suite.DockerTestPool.Retry(func() error {
 		url := "http://" + connectionDetails.BaseURL + "/geoserver"
 		suite.Logger.Log(
@@ -119,18 +114,20 @@ func (suite *BaseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetai
 		suite.Fail("Could not connect to docker: %s", err)
 	}
 	suite.Logger.Log("message", "Geoserver started successfully")
-	return
 }
 
-// StopGeoserver stops the Geoserver instance running in Docker
-func (suite *BaseIntegrationTestSuite) StopGeoserver() {
+// stopGeoserver stops the Geoserver instance running in Docker
+func (suite *BaseIntegrationTestSuite) stopGeoserver() {
 	if suite.geoserverResource != nil {
-		suite.DockerTestPool.Purge(suite.geoserverResource)
+		err := suite.DockerTestPool.Purge(suite.geoserverResource)
+		if err != nil {
+			suite.Fail(fmt.Sprintf("Could not stop Geoserver: %s", err))
+		}
 	}
 }
 
-// PostgresConnectionDetails are the connection details for the Geoserver instance
-type PostgresConnectionDetails struct {
+// postgresConnectionDetails are the connection details for the Geoserver instance
+type postgresConnectionDetails struct {
 	Host       string
 	Port       int
 	MappedPort int
@@ -139,66 +136,12 @@ type PostgresConnectionDetails struct {
 	Password   string
 }
 
-// Generate a Postgress connection URL from the connection details
-func (cd *PostgresConnectionDetails) URL(schema string) string {
+// URL generate a Postgres connection URL from the connection details
+func (cd *postgresConnectionDetails) URL(schema string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", cd.Username, cd.Password, cd.Host, cd.MappedPort, schema)
 }
 
-// PostgresGeoserverConnectionDetails represents the connection details for Postgres as used by Geoserver
-type PostgresGeoserverConnectionDetails struct {
-	Host      string
-	Port      int
-	Username  string
-	Password  string
-	Schema    string
-	Namespace string
-}
-
-func (cd *PostgresGeoserverConnectionDetails) Entries() map[string]string {
-	return map[string]string{
-		"host":      cd.Host,
-		"port":      fmt.Sprintf("%d", cd.Port),
-		"user":      cd.Username,
-		"passwd":    cd.Password,
-		"dbtype":    "postgis",
-		"database":  "postgres",
-		"schema":    cd.Schema,
-		"namespace": cd.Namespace,
-		// secondary configuration - set to defauls
-		"Evictor run periodicity":                    "300",
-		"Max open prepared statements":               "50",
-		"encode functions":                           "false",
-		"Batch insert size":                          "1",
-		"preparedStatements":                         "false",
-		"Loose bbox":                                 "true",
-		"Estimated extends":                          "true",
-		"fetch size":                                 "1000",
-		"Expose primary keys":                        "false",
-		"validate connections":                       "true",
-		"Support on the fly geometry simplification": "true",
-		"Connection timeout":                         "20",
-		"create database":                            "false",
-		"min connections":                            "1",
-		"max connections":                            "10",
-		"Evictor tests per run":                      "3",
-		"Test while idle":                            "true",
-		"Max connection idle time":                   "300",
-	}
-}
-
-// NewGeoserverPostgisConnectionDetails creates a new PostgresGeoserverConnectionDetails
-func NewGeoserverPostgisConnectionDetails(host string, port int, username string, password string, schema string, namespace string) *PostgresGeoserverConnectionDetails {
-	return &PostgresGeoserverConnectionDetails{
-		Host:      host,
-		Port:      port,
-		Username:  username,
-		Password:  password,
-		Schema:    schema,
-		Namespace: namespace,
-	}
-}
-
-func (suite *BaseIntegrationTestSuite) StartPostgres() *PostgresConnectionDetails {
+func (suite *BaseIntegrationTestSuite) startPostgres() *postgresConnectionDetails {
 	postgresOptions := &dockertest.RunOptions{
 		Repository: postgresDockerRepo,
 		Tag:        postgresDockerTag,
@@ -214,7 +157,7 @@ func (suite *BaseIntegrationTestSuite) StartPostgres() *PostgresConnectionDetail
 
 	containerName := resource.Container.Name[1:len(resource.Container.Name)]
 
-	connectionDetails := &PostgresConnectionDetails{
+	connectionDetails := &postgresConnectionDetails{
 		Host:       host,
 		Port:       5432,
 		MappedPort: port,
@@ -225,10 +168,13 @@ func (suite *BaseIntegrationTestSuite) StartPostgres() *PostgresConnectionDetail
 
 	// Create the Schema
 	session := suite.waitForPostgresToStartUp(connectionDetails)
-	session.Close()
+	err := session.Close()
+	if err != nil {
+		suite.Logger.Log("message", "Unable to close postgres connection")
+	}
 
 	// Migrate the schema
-	err := suite.migratePostgresSchema(connectionDetails)
+	err = suite.migratePostgresSchema(connectionDetails)
 	if err != nil {
 		suite.FailNow(err.Error())
 	}
@@ -236,7 +182,7 @@ func (suite *BaseIntegrationTestSuite) StartPostgres() *PostgresConnectionDetail
 	return connectionDetails
 }
 
-func (suite *BaseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetails *PostgresConnectionDetails) (session *sql.DB) {
+func (suite *BaseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetails *postgresConnectionDetails) (session *sql.DB) {
 	// Connect to the default postgres schema
 	postgresConnectionURL := connectionDetails.URL("postgres")
 
@@ -267,7 +213,7 @@ func (suite *BaseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetail
 }
 
 // migratePostgresSchema performs a schema migration using test data
-func (suite *BaseIntegrationTestSuite) migratePostgresSchema(connectionDetails *PostgresConnectionDetails) (err error) {
+func (suite *BaseIntegrationTestSuite) migratePostgresSchema(connectionDetails *postgresConnectionDetails) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			suite.Logger.Log("message", "Schema migration panicked", "panic", r)
@@ -299,9 +245,12 @@ func (suite *BaseIntegrationTestSuite) migratePostgresSchema(connectionDetails *
 	return
 }
 
-func (suite *BaseIntegrationTestSuite) StopPostgres() {
+func (suite *BaseIntegrationTestSuite) stopPostgres() {
 	if suite.postgresResource != nil {
-		suite.DockerTestPool.Purge(suite.postgresResource)
+		err := suite.DockerTestPool.Purge(suite.postgresResource)
+		if err != nil {
+			suite.Fail(fmt.Sprintf("Could not stop postgres: %s", err))
+		}
 	}
 }
 
@@ -324,38 +273,6 @@ func (suite *BaseIntegrationTestSuite) startDockerTestContainerOrFail(pool *dock
 		suite.Fail(fmt.Sprintf("Could not start resource %s", err))
 	}
 	return
-}
-
-// TestLogger is a simple implementation of LoggerFunc which writes to StdOut.
-type TestLogger struct {
-}
-
-// Log redirects to the standard Go logger.
-func (logger *TestLogger) Log(s string, args ...interface{}) {
-	keyValues := []string{fmt.Sprintf("%s=", s)}
-	isKey := false
-	for _, arg := range args {
-		delimiter := "%s  "
-		if isKey {
-			delimiter = "%s="
-		}
-		keyValues = append(keyValues, fmt.Sprintf(delimiter, arg))
-		isKey = !isKey
-	}
-
-	logLine := ""
-	for _, kv := range keyValues {
-		logLine = fmt.Sprintf("%s%s", logLine, kv)
-	}
-
-	golog.Printf(logLine)
-}
-
-// NewTestLogger creates a new TestLogger
-func NewTestLogger() LoggerFunc {
-	logger := &TestLogger{}
-	logger.Log("message", "Starting logger...")
-	return logger
 }
 
 // NewTestHTTPClient creates a new HTTP client for use in tests

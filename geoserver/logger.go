@@ -1,5 +1,10 @@
 package geoserver
 
+import (
+	"fmt"
+	golog "log"
+)
+
 const (
 	// levelKey is the key used by the logger to denote the logging level e.g info, debug etc
 	levelKey = "level"
@@ -40,4 +45,36 @@ const (
 // should convert the key value pairs to the appropriate string.
 type LoggerFunc interface {
 	Log(string, ...interface{})
+}
+
+// StdOutLogger is a simple implementation of LoggerFunc which writes to StdOut.
+type StdOutLogger struct {
+}
+
+// Log redirects to the standard Go logger.
+func (logger *StdOutLogger) Log(s string, args ...interface{}) {
+	keyValues := []string{fmt.Sprintf("%s=", s)}
+	isKey := false
+	for _, arg := range args {
+		delimiter := "%s  "
+		if isKey {
+			delimiter = "%s="
+		}
+		keyValues = append(keyValues, fmt.Sprintf(delimiter, arg))
+		isKey = !isKey
+	}
+
+	logLine := ""
+	for _, kv := range keyValues {
+		logLine = fmt.Sprintf("%s%s", logLine, kv)
+	}
+
+	golog.Print(logLine)
+}
+
+// NewStdOutLogger creates a new StdOutLogger
+func NewStdOutLogger() LoggerFunc {
+	logger := &StdOutLogger{}
+	logger.Log("message", "Starting logger...")
+	return logger
 }
