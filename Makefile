@@ -16,8 +16,8 @@ dependencies:
 ## Build tools ensures that the tools used in the build toolchain are installed and configured
 ## this should only have to be run once
 buildTools:
-	go install github.com/kyoh86/richgo && \
-	go install github.com/alecthomas/gometalinter \
+	go get -u github.com/kyoh86/richgo && \
+	go get -u github.com/alecthomas/gometalinter \
 	&& gometalinter --install
 
 ## Runs go fmt on the entire project, excluding the vendor directory
