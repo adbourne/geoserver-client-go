@@ -10,7 +10,7 @@ import (
 const (
 	geoserverDockerTag10 = "v2.10.5"
 	geoserverDockerTag11 = "v2.11.4"
-	geoserverDockerTag12 = "v2.12.0"
+	geoserverDockerTag12 = "v2.12.2"
 
 	postgresDatastoreType = "postgres"
 	testDatabase          = "postgres"
@@ -533,6 +533,10 @@ func TestRunRestGeoserver10ClientTestSuite(t *testing.T) {
 
 func TestRunRestGeoserver11ClientTestSuite(t *testing.T) {
 	suite.Run(t, newRestGeoserverClientTestSuite(geoserverDockerTag11))
+}
+
+func TestRunRestGeoserver12ClientTestSuite(t *testing.T) {
+	suite.Run(t, newRestGeoserverClientTestSuite(geoserverDockerTag12))
 }
 
 // Deletes all restWorkspaces in Geoserver
