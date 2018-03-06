@@ -9,6 +9,7 @@ import (
 
 const (
 	geoserverDockerTag10 = "v2.10.5"
+	geoserverDockerTag11 = "v2.11.4"
 	geoserverDockerTag12 = "v2.12.0"
 
 	postgresDatastoreType = "postgres"
@@ -528,6 +529,10 @@ func (suite *RestGeoserverClientTestSuite) TestDeleteFeatureTypeDoesNotReturnAnE
 
 func TestRunRestGeoserver10ClientTestSuite(t *testing.T) {
 	suite.Run(t, newRestGeoserverClientTestSuite(geoserverDockerTag10))
+}
+
+func TestRunRestGeoserver11ClientTestSuite(t *testing.T) {
+	suite.Run(t, newRestGeoserverClientTestSuite(geoserverDockerTag11))
 }
 
 // Deletes all restWorkspaces in Geoserver
