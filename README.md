@@ -10,7 +10,7 @@ Supported versions of Geoserver:
 | Version | Supported?   |
 | ---     | ---          |
 | v2.10.x | &#10003;     |
-| v2.11.x | **UNTESTED** |
+| v2.11.x | &#10003;     |
 | v2.12.x | **UNTESTED** |
 
 
