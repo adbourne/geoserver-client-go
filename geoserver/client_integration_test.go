@@ -18,7 +18,7 @@ const (
 )
 
 type RestGeoserverClientTestSuite struct {
-	BaseIntegrationTestSuite
+	baseIntegrationTestSuite
 
 	geoserverDockerTag string
 
