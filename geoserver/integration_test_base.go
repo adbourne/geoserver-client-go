@@ -30,8 +30,8 @@ const (
 	postgresPassword   = "postgres"
 )
 
-// BaseIntegrationTestSuite provides a base to build integration tests for the Geoserver client
-type BaseIntegrationTestSuite struct {
+// baseIntegrationTestSuite provides a base to build integration tests for the Geoserver client
+type baseIntegrationTestSuite struct {
 	suite.Suite
 
 	// Logger is the test logger
@@ -48,7 +48,7 @@ type BaseIntegrationTestSuite struct {
 }
 
 // InitialiseBase initialises the core components of the integration test
-func (suite *BaseIntegrationTestSuite) InitialiseBase() {
+func (suite *baseIntegrationTestSuite) InitialiseBase() {
 	suite.Logger = NewStdOutLogger()
 	suite.DockerTestPool = suite.createDockerConnectionPoolOrFail()
 }
@@ -62,7 +62,7 @@ type geoserverConnectionDetails struct {
 }
 
 // startGeoserver starts the Geoserver instance using Docker
-func (suite *BaseIntegrationTestSuite) startGeoserver(geoserverDockerTag string) *geoserverConnectionDetails {
+func (suite *baseIntegrationTestSuite) startGeoserver(geoserverDockerTag string) *geoserverConnectionDetails {
 	geoserverOptions := &dockertest.RunOptions{
 		Repository: geoserverDockerRepo,
 		Tag:        geoserverDockerTag,
@@ -94,7 +94,7 @@ func (suite *BaseIntegrationTestSuite) startGeoserver(geoserverDockerTag string)
 }
 
 // waitForGeoserverToStartUp waits for the Geoserver Docker instance to start up
-func (suite *BaseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetails *geoserverConnectionDetails) {
+func (suite *baseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetails *geoserverConnectionDetails) {
 	if err := suite.DockerTestPool.Retry(func() error {
 		url := "http://" + connectionDetails.BaseURL + "/geoserver"
 		suite.Logger.Log(
@@ -117,7 +117,7 @@ func (suite *BaseIntegrationTestSuite) waitForGeoserverToStartUp(connectionDetai
 }
 
 // stopGeoserver stops the Geoserver instance running in Docker
-func (suite *BaseIntegrationTestSuite) stopGeoserver() {
+func (suite *baseIntegrationTestSuite) stopGeoserver() {
 	if suite.geoserverResource != nil {
 		err := suite.DockerTestPool.Purge(suite.geoserverResource)
 		if err != nil {
@@ -141,7 +141,7 @@ func (cd *postgresConnectionDetails) URL(schema string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", cd.Username, cd.Password, cd.Host, cd.MappedPort, schema)
 }
 
-func (suite *BaseIntegrationTestSuite) startPostgres() *postgresConnectionDetails {
+func (suite *baseIntegrationTestSuite) startPostgres() *postgresConnectionDetails {
 	postgresOptions := &dockertest.RunOptions{
 		Repository: postgresDockerRepo,
 		Tag:        postgresDockerTag,
@@ -182,7 +182,7 @@ func (suite *BaseIntegrationTestSuite) startPostgres() *postgresConnectionDetail
 	return connectionDetails
 }
 
-func (suite *BaseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetails *postgresConnectionDetails) (session *sql.DB) {
+func (suite *baseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetails *postgresConnectionDetails) (session *sql.DB) {
 	// Connect to the default postgres schema
 	postgresConnectionURL := connectionDetails.URL("postgres")
 
@@ -213,7 +213,7 @@ func (suite *BaseIntegrationTestSuite) waitForPostgresToStartUp(connectionDetail
 }
 
 // migratePostgresSchema performs a schema migration using test data
-func (suite *BaseIntegrationTestSuite) migratePostgresSchema(connectionDetails *postgresConnectionDetails) (err error) {
+func (suite *baseIntegrationTestSuite) migratePostgresSchema(connectionDetails *postgresConnectionDetails) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			suite.Logger.Log("message", "Schema migration panicked", "panic", r)
@@ -245,7 +245,7 @@ func (suite *BaseIntegrationTestSuite) migratePostgresSchema(connectionDetails *
 	return
 }
 
-func (suite *BaseIntegrationTestSuite) stopPostgres() {
+func (suite *baseIntegrationTestSuite) stopPostgres() {
 	if suite.postgresResource != nil {
 		err := suite.DockerTestPool.Purge(suite.postgresResource)
 		if err != nil {
@@ -255,7 +255,7 @@ func (suite *BaseIntegrationTestSuite) stopPostgres() {
 }
 
 // createDockerConnectionPoolOrFail creates a Docker connection pool or fails the suite
-func (suite *BaseIntegrationTestSuite) createDockerConnectionPoolOrFail() (pool *dockertest.Pool) {
+func (suite *baseIntegrationTestSuite) createDockerConnectionPoolOrFail() (pool *dockertest.Pool) {
 	suite.Logger.Log("message", "Connecting to docker...")
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -267,7 +267,7 @@ func (suite *BaseIntegrationTestSuite) createDockerConnectionPoolOrFail() (pool 
 }
 
 // startDockerTestContainerOrFail starts a Docker container for a test or fails the suite.
-func (suite *BaseIntegrationTestSuite) startDockerTestContainerOrFail(pool *dockertest.Pool, options *dockertest.RunOptions) (resource *dockertest.Resource) {
+func (suite *baseIntegrationTestSuite) startDockerTestContainerOrFail(pool *dockertest.Pool, options *dockertest.RunOptions) (resource *dockertest.Resource) {
 	resource, err := pool.RunWithOptions(options)
 	if err != nil {
 		suite.Fail(fmt.Sprintf("Could not start resource %s", err))
